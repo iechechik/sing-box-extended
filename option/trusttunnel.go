@@ -7,6 +7,7 @@ type TrustTunnelInboundOptions struct {
 	Network              NetworkList       `json:"network,omitempty"`
 	CongestionController string            `json:"congestion_controller,omitempty"`
 	CWND                 int               `json:"cwnd,omitempty"`
+        DisablePathMTUDiscovery bool           `json:"disable_path_mtu_discovery,omitempty"`
 }
 
 type TrustTunnelUser struct {
@@ -33,4 +34,5 @@ type TrustTunnelOutboundOptions struct {
 	CongestionController string                       `json:"congestion_controller,omitempty"`
 	CWND                 int                          `json:"cwnd,omitempty"`
 	Multiplex            *TrustTunnelMultiplexOptions `json:"multiplex,omitempty"`
+        DisablePathMTUDiscovery bool                      `json:"disable_path_mtu_discovery,omitempty"`
 }

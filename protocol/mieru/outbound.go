@@ -61,7 +61,11 @@ func (o *Outbound) Start(stage adapter.StartStage) error {
 	}
 	serverOptions := o.options
 	if M.IsDomainName(serverOptions.Server) {
-		addresses, err := o.dnsRouter.Lookup(o.ctx, serverOptions.Server, adapter.DNSQueryOptions{})
+		var queryOptions adapter.DNSQueryOptions
+		if resolveDialer, isResolver := o.dialer.(dialer.ResolveDialer); isResolver {
+ 			queryOptions = resolveDialer.QueryOptions()
+ 		}
+ 		addresses, err := o.dnsRouter.Lookup(o.ctx, serverOptions.Server, queryOptions)
 		if err != nil {
 			return fmt.Errorf("failed to resolve mieru server address: %w", err)
 		}

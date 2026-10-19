@@ -156,6 +156,7 @@ func (h *Inbound) Start(stage adapter.StartStage) error {
 			MaxIdleTimeout:     trusttunnel.DefaultSessionTimeout * 2,
 			MaxIncomingStreams: 1 << 60,
 			Allow0RTT:          true,
+                        DisablePathMTUDiscovery: h.options.DisablePathMTUDiscovery,
 		})
 		if err != nil {
 			return err

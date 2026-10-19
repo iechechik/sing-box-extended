@@ -30,3 +30,7 @@ logs
 /*.db.backup.*
 /test_download.bin
 /wget-log
+vendor-utls/
+!vendor-utls/conn.go
+vendor-mieru
+*.orig

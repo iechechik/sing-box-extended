@@ -55,6 +55,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		CWND:              options.CWND,
 		Logger:            logger,
 		HealthCheck:       options.HealthCheck,
+                DisablePathMTUDiscovery: options.DisablePathMTUDiscovery,
 	}
 	var client trusttunnel.Dialer
 	if options.Multiplex != nil && options.Multiplex.Enabled {

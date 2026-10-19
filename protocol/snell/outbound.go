@@ -1,3 +1,5 @@
+//go:build !with_old_snell
+
 package snell
 
 import (

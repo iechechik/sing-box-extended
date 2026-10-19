@@ -1,4 +1,5 @@
-FROM --platform=$BUILDPLATFORM golang:1.26 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+RUN apk add --no-cache gcc musl-dev git
 LABEL maintainer="shtorm-7"
 COPY . /go/src/github.com/sagernet/sing-box
 WORKDIR /go/src/github.com/sagernet/sing-box
@@ -29,3 +30,5 @@ RUN set -ex \
     && apk add --no-cache --upgrade bash tzdata ca-certificates nftables
 COPY --from=builder /go/bin/sing-box /usr/local/bin/sing-box
 ENTRYPOINT ["sing-box"]
+CMD ["run", "-c", "/etc/sing-box/config.json"]
+

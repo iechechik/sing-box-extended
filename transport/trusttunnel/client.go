@@ -56,6 +56,7 @@ type ClientOptions struct {
 	MaxConnections    int
 	MinStreams        int
 	MaxStreams        int
+        DisablePathMTUDiscovery bool
 }
 
 type Client struct {
@@ -94,6 +95,7 @@ func NewClient(ctx context.Context, options ClientOptions) (*Client, error) {
 			QUICConfig: &quic.Config{
 				MaxIdleTimeout:  DefaultSessionTimeout * 2,
 				KeepAlivePeriod: DefaultHealthCheckTimeout,
+                                DisablePathMTUDiscovery: options.DisablePathMTUDiscovery,
 			},
 			Dial: func(ctx context.Context, addr string, tlsCfg *stdtls.Config, cfg *quic.Config) (*quic.Conn, error) {
 				udpConn, err := options.Dialer.DialContext(ctx, N.NetworkUDP, client.server)

@@ -72,6 +72,7 @@ type httpConn struct {
 	deadline   *time.Timer
 	done       chan struct{}
 	closed     bool
+        closeOnce  sync.Once
 
 	mtx sync.Mutex
 }
@@ -96,30 +97,28 @@ func (h *httpConn) waitCreated() error {
 }
 
 func (h *httpConn) Close() error {
-	h.mtx.Lock()
-	h.closed = true
-	h.mtx.Unlock()
-	h.setup(nil, net.ErrClosed)
-	if closer, ok := h.writer.(io.Closer); ok {
-		_ = closer.Close()
-	}
-	if h.body != nil {
-		_ = h.body.Close()
-	}
-	if h.cancelFn != nil {
-		h.cancelFn()
-	}
-	if h.closeFn != nil {
-		h.closeFn()
-	}
-	if h.done != nil {
-		select {
-		case <-h.done:
-		default:
-			close(h.done)
-		}
-	}
-	return nil
+        h.closeOnce.Do(func() {
+                h.mtx.Lock()
+                h.closed = true
+                h.mtx.Unlock()
+                h.setup(nil, net.ErrClosed)
+                if closer, ok := h.writer.(io.Closer); ok {
+                        _ = closer.Close()
+                }
+                if h.body != nil {
+                        _ = h.body.Close()
+                }
+                if h.cancelFn != nil {
+                        h.cancelFn()
+                }
+                if h.closeFn != nil {
+                        h.closeFn()
+                }
+                if h.done != nil {
+                        close(h.done)
+                }
+        })
+        return nil
 }
 
 func (h *httpConn) writeFlush(p []byte) (n int, err error) {

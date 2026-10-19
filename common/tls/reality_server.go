@@ -249,6 +249,15 @@ func (c *realityConnWrapper) CloseWrite() error {
 	return c.Close()
 }
 
+// Close frees TLS internal buffers after closing the connection.
+// FreeBuffers() is safe to call here because Close() guarantees
+// no concurrent reads are in progress after the connection is shut down.
+func (c *realityConnWrapper) Close() error {
+	err := c.Conn.Close()
+	c.Conn.FreeBuffers()
+	return err
+}
+
 func (c *realityConnWrapper) ReaderReplaceable() bool {
 	return true
 }
