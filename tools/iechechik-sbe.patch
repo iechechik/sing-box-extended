@@ -1,0 +1,377 @@
+diff --git a/.gitignore b/.gitignore
+index 94af8cfe..614c3adc 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -29,4 +29,7 @@ logs
+ /*.db-wal
+ /*.db.backup.*
+ /test_download.bin
+-/wget-log
+\ No newline at end of file
++/wget-log
++vendor-utls/
++!vendor-utls/conn.go
++vendor-mieru
+diff --git a/Dockerfile b/Dockerfile
+index bda283a8..de5c7424 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -1,4 +1,5 @@
+-FROM --platform=$BUILDPLATFORM golang:1.26 AS builder
++FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
++RUN apk add --no-cache gcc musl-dev git
+ LABEL maintainer="shtorm-7"
+ COPY . /go/src/github.com/sagernet/sing-box
+ WORKDIR /go/src/github.com/sagernet/sing-box
+@@ -29,3 +30,5 @@ RUN set -ex \
+     && apk add --no-cache --upgrade bash tzdata ca-certificates nftables
+ COPY --from=builder /go/bin/sing-box /usr/local/bin/sing-box
+ ENTRYPOINT ["sing-box"]
++CMD ["run", "-c", "/etc/sing-box/config.json"]
++
+diff --git a/common/tls/reality_server.go b/common/tls/reality_server.go
+index 10d60618..4a267804 100644
+--- a/common/tls/reality_server.go
++++ b/common/tls/reality_server.go
+@@ -249,6 +249,15 @@ func (c *realityConnWrapper) CloseWrite() error {
+ 	return c.Close()
+ }
+ 
++// Close frees TLS internal buffers after closing the connection.
++// FreeBuffers() is safe to call here because Close() guarantees
++// no concurrent reads are in progress after the connection is shut down.
++func (c *realityConnWrapper) Close() error {
++	err := c.Conn.Close()
++	c.Conn.FreeBuffers()
++	return err
++}
++
+ func (c *realityConnWrapper) ReaderReplaceable() bool {
+ 	return true
+ }
+diff --git a/go.mod b/go.mod
+index 23092463..13aaf67e 100644
+--- a/go.mod
++++ b/go.mod
+@@ -16,7 +16,7 @@ require (
+ 	github.com/cretz/bine v0.2.0
+ 	github.com/database64128/tfo-go/v2 v2.3.2
+ 	github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa
+-	github.com/enfein/mieru/v3 v3.33.0
++	github.com/enfein/mieru/v3 v3.38.1
+ 	github.com/go-chi/chi/v5 v5.2.5
+ 	github.com/go-chi/render v1.0.3
+ 	github.com/go-playground/validator/v10 v10.30.1
+@@ -287,3 +287,5 @@ replace github.com/shtorm-7/go-cache/v2 => github.com/shtorm-7/go-cache/v2 v2.1.
+ replace github.com/sagernet/sing => github.com/shtorm-7/sing v0.9.0-beta.4-extended-1.2.1
+ 
+ replace github.com/sagernet/sing-mux => github.com/shtorm-7/sing-mux v0.3.5-extended-1.0.0
++
++replace github.com/metacubex/utls => ./vendor-utls
+diff --git a/go.sum b/go.sum
+index f456520e..e0e1c769 100644
+--- a/go.sum
++++ b/go.sum
+@@ -122,6 +122,12 @@ github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/
+ github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
+ github.com/enfein/mieru/v3 v3.33.0 h1:hv2jK8nqYHwpSG86U2rpZR2I8Aff1/J3ifRmd9NBbFc=
+ github.com/enfein/mieru/v3 v3.33.0/go.mod h1:zJBUCsi5rxyvHM8fjFf+GLaEl4OEjjBXr1s5F6Qd3hM=
++github.com/enfein/mieru/v3 v3.35.0 h1:AKQT6l9R6xcYaUocpfjqE/vWEvYMxpl+071bhfDXkMY=
++github.com/enfein/mieru/v3 v3.35.0/go.mod h1:zJBUCsi5rxyvHM8fjFf+GLaEl4OEjjBXr1s5F6Qd3hM=
++github.com/enfein/mieru/v3 v3.37.0 h1:DKBDeBmlbpNKiOXtKXqxJo/BF+KvJKnbChn6fryeyHg=
++github.com/enfein/mieru/v3 v3.37.0/go.mod h1:zJBUCsi5rxyvHM8fjFf+GLaEl4OEjjBXr1s5F6Qd3hM=
++github.com/enfein/mieru/v3 v3.38.1 h1:UZ5zAJi0caSmaOniVy33pyY7ANxyf4PmPeLSuYZpDro=
++github.com/enfein/mieru/v3 v3.38.1/go.mod h1:zJBUCsi5rxyvHM8fjFf+GLaEl4OEjjBXr1s5F6Qd3hM=
+ github.com/envoyproxy/go-control-plane v0.9.0/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
+ github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1mIlRU8Am5FuJP05cCM98=
+ github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
+diff --git a/option/group.go b/option/group.go
+index 7f8446da..cb1299fc 100644
+--- a/option/group.go
++++ b/option/group.go
+@@ -15,6 +15,7 @@ type URLTestOutboundOptions struct {
+ 	Tolerance                 uint16             `json:"tolerance,omitempty"`
+ 	IdleTimeout               badoption.Duration `json:"idle_timeout,omitempty"`
+ 	InterruptExistConnections bool               `json:"interrupt_exist_connections,omitempty"`
++        Penalties                 map[string]uint16  `json:"penalties,omitempty"`
+ }
+ 
+ type FallbackOutboundOptions struct {
+diff --git a/option/trusttunnel.go b/option/trusttunnel.go
+index 046f823c..e0e6ea46 100644
+--- a/option/trusttunnel.go
++++ b/option/trusttunnel.go
+@@ -7,6 +7,7 @@ type TrustTunnelInboundOptions struct {
+ 	Network              NetworkList       `json:"network,omitempty"`
+ 	CongestionController string            `json:"congestion_controller,omitempty"`
+ 	CWND                 int               `json:"cwnd,omitempty"`
++        DisablePathMTUDiscovery bool           `json:"disable_path_mtu_discovery,omitempty"`
+ }
+ 
+ type TrustTunnelUser struct {
+@@ -33,4 +34,5 @@ type TrustTunnelOutboundOptions struct {
+ 	CongestionController string                       `json:"congestion_controller,omitempty"`
+ 	CWND                 int                          `json:"cwnd,omitempty"`
+ 	Multiplex            *TrustTunnelMultiplexOptions `json:"multiplex,omitempty"`
++        DisablePathMTUDiscovery bool                      `json:"disable_path_mtu_discovery,omitempty"`
+ }
+diff --git a/protocol/group/urltest.go b/protocol/group/urltest.go
+index 06a4ecb3..59b75a6b 100644
+--- a/protocol/group/urltest.go
++++ b/protocol/group/urltest.go
+@@ -49,6 +49,7 @@ type URLTest struct {
+ 	group                        *URLTestGroup
+ 	checkAccess                  sync.Mutex
+ 	interruptExternalConnections bool
++	penalties                    map[string]uint16
+ 
+ 	provider       adapter.ProviderManager
+ 	providers      map[string]adapter.Provider
+@@ -74,6 +75,7 @@ func NewURLTest(ctx context.Context, router adapter.Router, logger log.ContextLo
+ 		tolerance:                    options.Tolerance,
+ 		idleTimeout:                  time.Duration(options.IdleTimeout),
+ 		interruptExternalConnections: options.InterruptExistConnections,
++		penalties:                    options.Penalties,
+ 
+ 		provider:       service.FromContext[adapter.ProviderManager](ctx),
+ 		providers:      make(map[string]adapter.Provider),
+@@ -123,7 +125,18 @@ func (s *URLTest) Start() error {
+ 		s.tags = append(s.tags, detour.Tag())
+ 		outbounds = append(outbounds, detour)
+ 	}
+-	group, err := NewURLTestGroup(s.ctx, s.outbound, s.logger, outbounds, s.link, s.interval, s.tolerance, s.idleTimeout, s.interruptExternalConnections)
++	if len(s.penalties) > 0 {
++		known := make(map[string]bool, len(s.tags))
++		for _, tag := range s.tags {
++			known[tag] = true
++		}
++		for tag := range s.penalties {
++			if !known[tag] {
++				s.logger.Warn("penalty configured for unknown outbound: ", tag)
++			}
++		}
++	}
++	group, err := NewURLTestGroup(s.ctx, s.outbound, s.logger, outbounds, s.link, s.interval, s.tolerance, s.idleTimeout, s.interruptExternalConnections, s.penalties)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -321,9 +334,10 @@ type URLTestGroup struct {
+ 	close                        chan struct{}
+ 	started                      bool
+ 	lastActive                   common.TypedValue[time.Time]
++	penalties                    map[string]uint16
+ }
+ 
+-func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, interruptExternalConnections bool) (*URLTestGroup, error) {
++func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManager, logger log.Logger, outbounds []adapter.Outbound, link string, interval time.Duration, tolerance uint16, idleTimeout time.Duration, interruptExternalConnections bool, penalties map[string]uint16) (*URLTestGroup, error) {
+ 	if interval == 0 {
+ 		interval = C.DefaultURLTestInterval
+ 	}
+@@ -354,6 +368,7 @@ func NewURLTestGroup(ctx context.Context, outboundManager adapter.OutboundManage
+ 		pause:                        service.FromContext[pause.Manager](ctx),
+ 		interruptGroup:               interrupt.NewGroup(),
+ 		interruptExternalConnections: interruptExternalConnections,
++		penalties:                    penalties,
+ 	}, nil
+ }
+ 
+@@ -404,6 +419,7 @@ func (g *URLTestGroup) Select(network string) (adapter.Outbound, bool) {
+ 			if history := g.history.LoadURLTestHistory(RealTag(g.outbound, g.selectedOutboundTCP)); history != nil {
+ 				minOutbound = g.selectedOutboundTCP
+ 				minDelay = history.Delay
++                                minDelay = g.effectiveDelay(g.selectedOutboundTCP, history.Delay)
+ 			}
+ 		}
+ 	case N.NetworkUDP:
+@@ -411,6 +427,8 @@ func (g *URLTestGroup) Select(network string) (adapter.Outbound, bool) {
+ 			if history := g.history.LoadURLTestHistory(RealTag(g.outbound, g.selectedOutboundUDP)); history != nil {
+ 				minOutbound = g.selectedOutboundUDP
+ 				minDelay = history.Delay
++                                minDelay = g.effectiveDelay(g.selectedOutboundTCP, history.Delay)
++
+ 			}
+ 		}
+ 	}
+@@ -422,8 +440,11 @@ func (g *URLTestGroup) Select(network string) (adapter.Outbound, bool) {
+ 		if history == nil {
+ 			continue
+ 		}
+-		if minDelay == 0 || minDelay > history.Delay+g.tolerance {
+-			minDelay = history.Delay
++
++		effDelay := g.effectiveDelay(detour, history.Delay)
++
++		if minDelay == 0 || uint32(minDelay) > uint32(effDelay)+(uint32)(g.tolerance) {
++			minDelay = effDelay
+ 			minOutbound = detour
+ 		}
+ 	}
+@@ -609,3 +630,14 @@ func (g *URLTestGroup) performUpdateCheck() {
+ 		g.interruptGroup.Interrupt(g.interruptExternalConnections)
+ 	}
+ }
++
++func (g *URLTestGroup) effectiveDelay(detour adapter.Outbound, delay uint16) uint16 {
++	if penalty, ok := g.penalties[detour.Tag()]; ok {
++		total := uint32(delay) + uint32(penalty)
++		if total > 65535 {
++			return 65535
++		}
++		return uint16(total)
++	}
++	return delay
++}
+diff --git a/protocol/mieru/outbound.go b/protocol/mieru/outbound.go
+index 6176fe0f..40be5ea9 100644
+--- a/protocol/mieru/outbound.go
++++ b/protocol/mieru/outbound.go
+@@ -61,7 +61,11 @@ func (o *Outbound) Start(stage adapter.StartStage) error {
+ 	}
+ 	serverOptions := o.options
+ 	if M.IsDomainName(serverOptions.Server) {
+-		addresses, err := o.dnsRouter.Lookup(o.ctx, serverOptions.Server, adapter.DNSQueryOptions{})
++		var queryOptions adapter.DNSQueryOptions
++		if resolveDialer, isResolver := o.dialer.(dialer.ResolveDialer); isResolver {
++ 			queryOptions = resolveDialer.QueryOptions()
++ 		}
++ 		addresses, err := o.dnsRouter.Lookup(o.ctx, serverOptions.Server, queryOptions)
+ 		if err != nil {
+ 			return fmt.Errorf("failed to resolve mieru server address: %w", err)
+ 		}
+diff --git a/protocol/trusttunnel/inbound.go b/protocol/trusttunnel/inbound.go
+index f9065c63..faadefb2 100644
+--- a/protocol/trusttunnel/inbound.go
++++ b/protocol/trusttunnel/inbound.go
+@@ -156,6 +156,7 @@ func (h *Inbound) Start(stage adapter.StartStage) error {
+ 			MaxIdleTimeout:     trusttunnel.DefaultSessionTimeout * 2,
+ 			MaxIncomingStreams: 1 << 60,
+ 			Allow0RTT:          true,
++                        DisablePathMTUDiscovery: h.options.DisablePathMTUDiscovery,
+ 		})
+ 		if err != nil {
+ 			return err
+diff --git a/protocol/trusttunnel/outbound.go b/protocol/trusttunnel/outbound.go
+index 4371de76..7eb8f36e 100644
+--- a/protocol/trusttunnel/outbound.go
++++ b/protocol/trusttunnel/outbound.go
+@@ -55,6 +55,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
+ 		CWND:              options.CWND,
+ 		Logger:            logger,
+ 		HealthCheck:       options.HealthCheck,
++                DisablePathMTUDiscovery: options.DisablePathMTUDiscovery,
+ 	}
+ 	var client trusttunnel.Dialer
+ 	if options.Multiplex != nil && options.Multiplex.Enabled {
+diff --git a/release/DEFAULT_BUILD_TAGS_DOCKER b/release/DEFAULT_BUILD_TAGS_DOCKER
+index c08c2388..fb1b86e2 100644
+--- a/release/DEFAULT_BUILD_TAGS_DOCKER
++++ b/release/DEFAULT_BUILD_TAGS_DOCKER
+@@ -1 +1 @@
+-with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_manager,with_admin_panel,with_masque,with_mtproxy,with_ccm,with_ocm,with_trusttunnel,with_call,with_sudoku,with_naive_outbound,with_musl,badlinkname,tfogo_checklinkname0
++with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_masque,with_mtproxy,with_ccm,with_ocm,with_trusttunnel,with_sudoku,with_musl,badlinkname,tfogo_checklinkname0,with_profiler,with_old_snell
+diff --git a/transport/trusttunnel/client.go b/transport/trusttunnel/client.go
+index 9b57675b..a7bf66c8 100644
+--- a/transport/trusttunnel/client.go
++++ b/transport/trusttunnel/client.go
+@@ -56,6 +56,7 @@ type ClientOptions struct {
+ 	MaxConnections    int
+ 	MinStreams        int
+ 	MaxStreams        int
++        DisablePathMTUDiscovery bool
+ }
+ 
+ type Client struct {
+@@ -94,6 +95,7 @@ func NewClient(ctx context.Context, options ClientOptions) (*Client, error) {
+ 			QUICConfig: &quic.Config{
+ 				MaxIdleTimeout:  DefaultSessionTimeout * 2,
+ 				KeepAlivePeriod: DefaultHealthCheckTimeout,
++                                DisablePathMTUDiscovery: options.DisablePathMTUDiscovery,
+ 			},
+ 			Dial: func(ctx context.Context, addr string, tlsCfg *stdtls.Config, cfg *quic.Config) (*quic.Conn, error) {
+ 				udpConn, err := options.Dialer.DialContext(ctx, N.NetworkUDP, client.server)
+diff --git a/transport/trusttunnel/protocol.go b/transport/trusttunnel/protocol.go
+index 047c96c8..d0147728 100644
+--- a/transport/trusttunnel/protocol.go
++++ b/transport/trusttunnel/protocol.go
+@@ -72,6 +72,7 @@ type httpConn struct {
+ 	deadline   *time.Timer
+ 	done       chan struct{}
+ 	closed     bool
++        closeOnce  sync.Once
+ 
+ 	mtx sync.Mutex
+ }
+@@ -96,30 +97,28 @@ func (h *httpConn) waitCreated() error {
+ }
+ 
+ func (h *httpConn) Close() error {
+-	h.mtx.Lock()
+-	h.closed = true
+-	h.mtx.Unlock()
+-	h.setup(nil, net.ErrClosed)
+-	if closer, ok := h.writer.(io.Closer); ok {
+-		_ = closer.Close()
+-	}
+-	if h.body != nil {
+-		_ = h.body.Close()
+-	}
+-	if h.cancelFn != nil {
+-		h.cancelFn()
+-	}
+-	if h.closeFn != nil {
+-		h.closeFn()
+-	}
+-	if h.done != nil {
+-		select {
+-		case <-h.done:
+-		default:
+-			close(h.done)
+-		}
+-	}
+-	return nil
++        h.closeOnce.Do(func() {
++                h.mtx.Lock()
++                h.closed = true
++                h.mtx.Unlock()
++                h.setup(nil, net.ErrClosed)
++                if closer, ok := h.writer.(io.Closer); ok {
++                        _ = closer.Close()
++                }
++                if h.body != nil {
++                        _ = h.body.Close()
++                }
++                if h.cancelFn != nil {
++                        h.cancelFn()
++                }
++                if h.closeFn != nil {
++                        h.closeFn()
++                }
++                if h.done != nil {
++                        close(h.done)
++                }
++        })
++        return nil
+ }
+ 
+ func (h *httpConn) writeFlush(p []byte) (n int, err error) {
+
+--- a/vendor-utls/conn.go
++++ b/vendor-utls/conn.go
+@@ -1518,6 +1518,17 @@
+ 	return alertErr
+ }
+ 
++// FreeBuffers releases memory held by internal read buffers (rawInput, hand).
++// Must be called only after the connection is fully closed and no goroutines
++// are reading from it. Replaces buffer values with empty ones so GC can reclaim
++// the backing arrays that grew during large data transfers (iperf, speedtest).
++func (c *Conn) FreeBuffers() {
++        c.in.Lock()
++        c.rawInput = bytes.Buffer{}
++        c.hand = bytes.Buffer{}
++        c.in.Unlock()
++}
++
+ var errEarlyCloseWrite = errors.New("tls: CloseWrite called before handshake complete")
+ 
+ // CloseWrite shuts down the writing side of the connection. It should only be
