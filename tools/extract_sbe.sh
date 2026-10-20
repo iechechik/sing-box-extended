@@ -26,5 +26,10 @@ else
   exit 1
 fi
 
+# 5. Настраиваем remote для будущих обновлений
+echo "=> Настраиваем remote (upstream и origin)..."
+git remote rename origin upstream
+git remote add origin https://github.com/iechechik/sing-box-extended.git
+
 echo "Готово! Исходники развернуты, пропатчены, .orig созданы."
 exit 0

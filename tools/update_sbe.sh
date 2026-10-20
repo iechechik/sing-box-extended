@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SBE_DIR=".."
+SBE_DIR="/opt/software/sing-box-extended"
 
 cd "$SBE_DIR"
 
