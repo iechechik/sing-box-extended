@@ -1,5 +1,3 @@
-//go:build !with_old_snell
-
 package option
 
 import (
