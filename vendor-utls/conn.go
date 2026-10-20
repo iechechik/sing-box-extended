@@ -1523,10 +1523,10 @@ func (c *Conn) Close() error {
 // are reading from it. Replaces buffer values with empty ones so GC can reclaim
 // the backing arrays that grew during large data transfers (iperf, speedtest).
 func (c *Conn) FreeBuffers() {
-        c.in.Lock()
-        c.rawInput = bytes.Buffer{}
-        c.hand = bytes.Buffer{}
-        c.in.Unlock()
+	c.in.Lock()
+	c.rawInput = bytes.Buffer{}
+	c.hand = bytes.Buffer{}
+	c.in.Unlock()
 }
 
 var errEarlyCloseWrite = errors.New("tls: CloseWrite called before handshake complete")
